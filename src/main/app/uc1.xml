@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd">
+	<flow name="UC1-xmlFlow">
+        <file:outbound-endpoint path="${dir.input.products}" connector-ref="input-files" responseTimeout="10000" doc:name="read XML file">
+            <file:filename-regex-filter pattern="${file.input.products}" caseSensitive="true"/>
+        </file:outbound-endpoint>
+	<component doc:name="Update Prices">
+		<spring-object bean="ProductHandler" />
+	</component>
+	<file:outbound-endpoint path="${dir.output.products}"
+		outputPattern="XML-#[server.dateTime]-#[message.inboundProperties['originalFilename']]"
+		responseTimeout="10000" doc:name="moveProcessedFile" connector-ref="output-files">
+	</file:outbound-endpoint>
+	</flow>
+	<flow name="UC1-dwFlow">
+	<file:inbound-endpoint path="${dir.input.products}"
+		connector-ref="input-files" responseTimeout="10000" doc:name="read XML file"
+		pollingFrequency="120000">
+		<file:filename-regex-filter pattern="${file.input.products}"
+			caseSensitive="true" />
+	</file:inbound-endpoint>
+        <dw:transform-message doc:name="Transform Message" metadata:id="d5d7d4d8-7249-4022-aa03-9f3f8dcdc3b4">
+            <dw:input-payload mimeType="application/xml"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+---
+{
+	products: {
+		(payload.products.*product map ((product , indexOfProduct) -> {
+			product: {
+				description: product.description,
+				price: product.price*1.01,
+				listing_name: product.listing_name,
+				id: product.id,
+				stock: product.stock
+			}
+		}))
+	}
+}]]></dw:set-payload>
+        </dw:transform-message>
+	<file:outbound-endpoint path="${dir.output.products}"
+		outputPattern="DW-#[server.dateTime]-#[message.inboundProperties['originalFilename']]"
+		responseTimeout="10000" doc:name="moveProcessedFile" connector-ref="output-files">
+	</file:outbound-endpoint>
+	</flow>
+</mule>
